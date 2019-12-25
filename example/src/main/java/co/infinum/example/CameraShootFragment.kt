@@ -27,6 +27,7 @@ import co.infinum.goldeneye.utils.GoldenEyeScaleUtils
 import kotlinx.android.synthetic.main.fragment_camera_shoot.*
 import java.io.File
 import java.util.concurrent.Executors
+import kotlin.math.max
 import kotlin.math.min
 
 /**
@@ -338,7 +339,7 @@ class CameraShootFragment : Fragment() {
                     layoutParams = layoutParams.apply {
                         val scaleX = previewVideoContainer.width / width.toFloat()
                         val scaleY = previewVideoContainer.height / height.toFloat()
-                        val scale = min(scaleX, scaleY)
+                        val scale = max(scaleX, scaleY)
 
                         this.width = (width * scale).toInt()
                         this.height = (height * scale).toInt()
