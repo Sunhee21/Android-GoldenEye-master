@@ -7,6 +7,7 @@ import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.media.MediaPlayer
@@ -23,9 +24,13 @@ import co.infinum.goldeneye.InitCallback
 import co.infinum.goldeneye.Logger
 import co.infinum.goldeneye.config.CameraConfig
 import co.infinum.goldeneye.config.CameraInfo
+import co.infinum.goldeneye.models.PreviewScale
 import co.infinum.goldeneye.utils.GoldenEyeScaleUtils
+import com.blankj.utilcode.util.FileUtils
+import com.blankj.utilcode.util.ImageUtils
 import kotlinx.android.synthetic.main.fragment_camera_shoot.*
 import java.io.File
+import java.io.Serializable
 import java.util.concurrent.Executors
 import kotlin.math.max
 import kotlin.math.min
@@ -41,6 +46,7 @@ class CameraShootFragment : Fragment() {
         fun newInstance() = CameraShootFragment()
 
         const val MAX_DURATION = 15;
+        const val MIN_DURATION = 1500L;
 
         const val HDANDLER_DELAY = MAX_DURATION * 10;
     }
@@ -57,6 +63,9 @@ class CameraShootFragment : Fragment() {
             t.printStackTrace()
         }
     }
+
+    private var shootBitmap: Bitmap? = null
+    private var shootDuration:Long = 0L
 
 
     private var isCancel: Boolean = false
@@ -127,6 +136,7 @@ class CameraShootFragment : Fragment() {
                     //                    zoomView.text = "Zoom: ${it.toPercentage()}"
                 }
                 .build()
+
     }
 
     private var mDownTime = 0L
@@ -181,6 +191,7 @@ class CameraShootFragment : Fragment() {
         }
 
         view_send.backLayout.setOnClickListener {
+            shootBitmap = null
             previewVideoContainer.visibility = View.GONE
             previewPictureView.visibility = View.GONE
             view_send.stopAnim()
@@ -192,6 +203,27 @@ class CameraShootFragment : Fragment() {
         }
         view_send.selectLayout.setOnClickListener {
             //选择
+            previewMediaPlayer?.release()
+            previewMediaPlayer = null
+            val intent = Intent()
+            if (shootBitmap != null) {
+                val savePath =
+                    activity!!.filesDir.absolutePath + "/shoot_pic/${System.currentTimeMillis()}"
+                if (com.blankj.utilcode.util.ImageUtils.save(shootBitmap, savePath, Bitmap.CompressFormat.JPEG)) {
+                    val imageInfo =
+                        GoldenPictureResult(savePath, shootBitmap!!.width, shootBitmap!!.height)
+                    intent.putExtra(GOLDEN_RESULT, imageInfo)
+                    activity!!.setResult(GOLDEN_PICTURE_RESULT, intent)
+                }
+            } else if (FileUtils.getFileLength(videoFile) != -1L) {
+                val videoInfo = GoldenVideoResult(
+                    videoFile.absolutePath,
+                    shootDuration
+                )
+                intent.putExtra(GOLDEN_RESULT, videoInfo)
+                activity!!.setResult(GOLDEN_VIDEO_RESULT, intent)
+            }
+            activity!!.finish()
         }
     }
 
@@ -243,6 +275,7 @@ class CameraShootFragment : Fragment() {
     private fun displayPicture(bitmap: Bitmap) {
         showSend()
         previewPictureView.apply {
+            shootBitmap = bitmap
             setImageBitmap(bitmap)
             visibility = View.VISIBLE
         }
@@ -252,20 +285,32 @@ class CameraShootFragment : Fragment() {
     private fun record() {
         isRecording = true
         goldenEye.startRecording(
-                file = videoFile,
-                onVideoRecorded = {
-                    if (!isCancel){
-                        previewVideoContainer.visibility = View.VISIBLE
-                        if (previewVideoView.isAvailable) {
+            file = videoFile,
+            onVideoRecorded = {
+                if (!isCancel && checkShootDuration()) {
+                    previewVideoContainer.visibility = View.VISIBLE
+                    if (previewVideoView.isAvailable) {
 
-                            startVideo()
-                        } else {
-                            previewVideoView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-                                override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture?, width: Int, height: Int) {}
+                        startVideo()
+                    } else {
+                        previewVideoView.surfaceTextureListener =
+                            object : TextureView.SurfaceTextureListener {
+                                override fun onSurfaceTextureSizeChanged(
+                                    surface: SurfaceTexture?,
+                                    width: Int,
+                                    height: Int
+                                ) {
+                                }
+
                                 override fun onSurfaceTextureUpdated(surface: SurfaceTexture?) {}
-                                override fun onSurfaceTextureDestroyed(surface: SurfaceTexture?) = true
+                                override fun onSurfaceTextureDestroyed(surface: SurfaceTexture?) =
+                                    true
 
-                                override fun onSurfaceTextureAvailable(surface: SurfaceTexture?, width: Int, height: Int) {
+                                override fun onSurfaceTextureAvailable(
+                                    surface: SurfaceTexture?,
+                                    width: Int,
+                                    height: Int
+                                ) {
                                     startVideo()
                                 }
                             }
@@ -318,8 +363,19 @@ class CameraShootFragment : Fragment() {
      */
     private fun stopRecord() {
         isRecording = false
+        shootDuration = ((mProgress-1)/*ui展示的少1个周期*/ * HDANDLER_DELAY).toLong()
         goldenEye.stopRecording()
         stopAnim(Runnable {})
+    }
+
+
+    private fun checkShootDuration():Boolean{
+        if (shootDuration > MIN_DURATION){
+            return true
+        }else{
+            Toast.makeText(activity,"录制时长过短",Toast.LENGTH_SHORT).show()
+            return false
+        }
     }
 
     /**
@@ -446,3 +502,22 @@ class CameraShootFragment : Fragment() {
         tv_info.visibility = View.GONE
     }
 }
+
+/**
+ * 返回结果
+ */
+data class GoldenPictureResult(
+    val path: String,
+    val width: Int,
+    val height: Int
+) : Serializable
+
+data class GoldenVideoResult(
+    val path: String,
+    val length: Long
+) : Serializable
+
+
+val GOLDEN_PICTURE_RESULT: Int = 1010
+val GOLDEN_VIDEO_RESULT: Int = 1011
+val GOLDEN_RESULT = "golden_result"

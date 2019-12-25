@@ -19,4 +19,5 @@ dependencies {
     implementation "com.android.support:appcompat-v7:$versions.google"
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$versions.kotlin"
     implementation "com.android.support:recyclerview-v7:$versions.google"
+    implementation 'com.blankj:utilcodex:1.25.9'
 }

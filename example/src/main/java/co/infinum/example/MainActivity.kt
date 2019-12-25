@@ -228,6 +228,7 @@ class MainActivity : AppCompatActivity() {
     private fun prepareItems() {
         goldenEye.config?.apply {
             prepareItems(this@MainActivity, settingsAdapter)
+
         }
     }
 
